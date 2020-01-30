@@ -1,12 +1,14 @@
 package com.example.arboardgame
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.KeyCharacterMap
 import android.view.MotionEvent
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -20,10 +22,25 @@ import com.google.ar.sceneform.math.Vector3
 import com.google.ar.sceneform.rendering.ModelRenderable
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
+import android.speech.RecognizerIntent
+import android.content.Intent
+import androidx.core.app.ComponentActivity
+import androidx.core.app.ComponentActivity.ExtraData
+import androidx.core.content.ContextCompat.getSystemService
+import android.icu.lang.UCharacter.GraphemeClusterBreak.T
+import android.widget.ImageView
+import androidx.core.view.isVisible
+import com.google.android.filament.View
+import java.util.*
+import kotlin.concurrent.fixedRateTimer
 
-class MainActivity : AppCompatActivity() {
+
+class MainActivity : AppCompatActivity(), InfoCallback {
 
     private val CAMERA_PERMISSION = 42
+
+    private val infoFragment = InfoFragment()
+
 
     //Maps what we get from Firebase with an easier to work with value
     companion object {
@@ -66,6 +83,8 @@ class MainActivity : AppCompatActivity() {
     private var saturnRenderable: ModelRenderable? = null
     private var neptuneRenderable: ModelRenderable? = null
     private var uranusRenderable: ModelRenderable? = null
+    private var txvResult: TextView? = null
+    private var button: ImageView? = null
 
     //Flag for when the 3D models have finished loading
     private var hasFinishedLoading = false
@@ -74,7 +93,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        requestCameraPermission();
+        requestCameraPermission()
+        txvResult = findViewById(R.id.txvResult)
+        button = findViewById(R.id.btnSpeak)
+
 
         arSceneView = findViewById(R.id.ar_scene_view)
 
@@ -83,6 +105,35 @@ class MainActivity : AppCompatActivity() {
         initGestures()
         initSceneView()
         requestCameraPermission()
+    }
+
+    fun getSpeechInput() {
+
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+        intent.putExtra(
+            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+        )
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+
+        if (intent.resolveActivity(packageManager) != null) {
+            startActivityForResult(intent, 10)
+        } else {
+            Toast.makeText(this, "Your Device Don't Support Speech Input", Toast.LENGTH_SHORT)
+                .show()
+        }
+
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        when (requestCode) {
+            10 -> if (resultCode == Activity.RESULT_OK && data != null) {
+                val result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                txvResult?.text = result!![0]
+            }
+        }
     }
 
     private fun requestCameraPermission() {
@@ -170,25 +221,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initData() {
-//        val database = FirebaseDatabase.getInstance()
-//        val myRef = database.getReference("piece/1/tag/planet")
-//        myRef.addValueEventListener(object : ValueEventListener {
-//            override fun onDataChange(dataSnapshot: DataSnapshot) {
-//                celestial = dataSnapshot.getValue(String::class.java) ?: MERCURY
-//                hasPlacedObject = false
-//                this@MainActivity.runOnUiThread { objectBase?.setParent(null) }
-//            }
-//
-//            override fun onCancelled(error: DatabaseError) {
-//                Log.w("TEST", "Failed to read value.", error.toException())
-//            }
-//        })
-
-        celestial = MERCURY
+        celestial = SATURN
         hasPlacedObject = false
         this@MainActivity.runOnUiThread { objectBase?.setParent(null) }
-
-
     }
 
     private fun initRenderables() {
@@ -289,6 +324,7 @@ class MainActivity : AppCompatActivity() {
     private fun initGestures() {
         gestureDetector = GestureDetector(this,
             object : GestureDetector.SimpleOnGestureListener() {
+
                 override fun onSingleTapUp(e: MotionEvent?): Boolean {
                     onSingleTap(e, celestial)
                     return super.onSingleTapUp(e)
@@ -298,6 +334,8 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
             })
+
+        val frame = arSceneView.arFrame
 
         arSceneView.scene.setOnTouchListener { hitTestResult, motionEvent ->
             if (!hasPlacedObject) {
@@ -313,6 +351,7 @@ class MainActivity : AppCompatActivity() {
         }
         val frame = arSceneView.arFrame
         if (frame != null) {
+
             if (!hasPlacedObject && tryPlacingObject(tap, frame, celestialKey))
                 hasPlacedObject = true
         }
@@ -339,35 +378,45 @@ class MainActivity : AppCompatActivity() {
 
     private fun createCelestial(celestialKey: String): Node {
         val base = Node()
-
-        val celestialObject = RotatingNode()
-
-
-        celestialObject.setParent(base)
-        celestialObject.localPosition = Vector3(0.0f, 0.5f, 0.0f)
-        celestialObject.localScale = Vector3(0.5f, 0.5f, 0.5f)
-
-        if (celestialKey == SUN) {
-            celestialObject.renderable = sunRenderable
-        } else if (celestialKey == MERCURY) {
-            celestialObject.renderable = mercuryRenderable
-        } else if (celestialKey == VENUS) {
-            celestialObject.renderable = venusRenderable
-        } else if (celestialKey == EARTH) {
-            celestialObject.renderable = earthRenderable
-        } else if (celestialKey == MARS) {
-            celestialObject.renderable = marsRenderable
-        } else if (celestialKey == JUPITER) {
-            celestialObject.renderable = jupiterRenderable
-        } else if (celestialKey == SATURN) {
-            celestialObject.renderable = saturnRenderable
-        } else if (celestialKey == NEPTUNE) {
-            celestialObject.renderable = neptuneRenderable
-        } else if (celestialKey == URANUS) {
-            celestialObject.renderable = uranusRenderable
+        val renderable = getRenderable(celestialKey)
+        if (renderable != null) {
+            val celestialObject = CelestialBody(
+                context = this,
+                celestialName = celestial,
+                renderable = renderable,
+                infoCallback = this
+            )
+            celestialObject.setParent(base)
+            celestialObject.localPosition = Vector3(0.0f, 0.5f, 0.0f)
+            celestialObject.localScale = Vector3(0.5f, 0.5f, 0.5f)
         }
         return base
     }
+
+    private fun getRenderable(celestialKey: String): ModelRenderable? {
+        return when (celestialKey) {
+            SUN -> sunRenderable
+            MERCURY -> mercuryRenderable
+            VENUS -> venusRenderable
+            EARTH -> earthRenderable
+            MARS -> marsRenderable
+            JUPITER -> jupiterRenderable
+            SATURN -> saturnRenderable
+            NEPTUNE -> neptuneRenderable
+            URANUS -> uranusRenderable
+            else -> null
+        }
+    }
+
+    override fun showInfo() {
+        infoFragment.planet = celestial
+        infoFragment.show(supportFragmentManager, "infoFragment")
+    }
+
+}
+
+interface InfoCallback {
+    fun showInfo()
 }
 
 

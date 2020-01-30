@@ -42,6 +42,9 @@ dependencies {
 
     apply plugin: 'com.google.ar.sceneform.plugin'
 
+    implementation group: 'com.google.android.material', name: 'material', version: '1.1.0-alpha05'
+
+
 }
 
 sceneform.asset('sampledata/models/Sol/Sol.gltf',

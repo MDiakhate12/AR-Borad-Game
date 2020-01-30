@@ -15,7 +15,6 @@ class RotatingNode(
     val degreesPerSecond: Float = 90.0f
 ) : Node() {
 
-
     private var animator: ObjectAnimator? = null
 
     override fun onActivate() {
